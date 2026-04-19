@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Beckhoff CX5140 PLC &ndash; Cereal Box Filler Control System</title>
+<style>
+  :root { --accent:#1f4f8b; --muted:#5a6a78; --bg:#ffffff; --fg:#1a1a1a; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 820px; margin: 2rem auto; padding: 0 1.25rem; color: var(--fg); background: var(--bg); line-height: 1.65; }
+  h1 { color: var(--accent); border-bottom: 2px solid var(--accent); padding-bottom: .4rem; margin-bottom: .4rem; }
+  h2 { color: var(--accent); margin-top: 2rem; }
+  h3 { color: #2a3f55; margin-top: 1.5rem; }
+  .subtitle { font-size: 1.05rem; color: var(--muted); font-style: italic; margin-bottom: 1.5rem; }
+  p { margin: 0.8rem 0; }
+  strong { color: #111; }
+  code { background: #f3f4f6; padding: .1rem .35rem; border-radius: 3px; font-size: 0.92em; }
+  hr { border: none; border-top: 1px solid #d8dde3; margin: 1.5rem 0; }
+  .tech-block { background: #f7f9fc; border-left: 3px solid var(--accent); padding: .75rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
+  table { border-collapse: collapse; margin: 1rem 0; width: 100%; font-size: 0.95em; }
+  th, td { border: 1px solid #d8dde3; padding: .45rem .7rem; text-align: left; }
+  th { background: #f3f6fa; color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>Beckhoff CX5140 PLC &ndash; Cereal Box Filler Control System</h1>
+<p class="subtitle">A sequential process-control application implemented on a Beckhoff Windows-based industrial PC using TwinCAT 3 ladder logic, including logical-operation, timer, and state-machine exercises that build up to a full cereal box filling machine.</p>
+
+<hr>
+
+<h2>Project Overview</h2>
+<p>This project is an EE 5340 graduate laboratory exercise (Lab 6 &ndash; <em>Beckhoff CX5140</em>) focused on programming a modern Windows-based PLC in the IEC 61131-3 Ladder Diagram language. The lab walks through the full tool-chain for a Beckhoff controller &mdash; network setup, I/O scanning, variable linking, program organization, and online debugging in TwinCAT 3 &mdash; and culminates in a complete cereal box filling station controller written as a latched, step-based sequencer with stop/resume and reset handling. The work was completed as a two-person group assignment.</p>
+<p>The deliverable demonstrates practical fluency with the Beckhoff/TwinCAT ecosystem, the IEC 61131-3 programming model (POUs, tasks, typed variables, and ladder networks), and the classic set/reset step-sequence pattern that is the workhorse of industrial batch and discrete control.</p>
+
+<h2>Learning Objectives</h2>
+<p>The lab was structured to build working knowledge of the Beckhoff CX5140 embedded PC platform and TwinCAT 3 engineering environment, hands-on use of Ladder Diagram programming under the IEC 61131-3 standard, implementation of logical-AND and logical-OR circuits from physical switches to a light load, on-delay timer (TON) programming for timed transitions, and finally a full sequential controller for a cereal-filling process with pause/resume, reset, and independent conveyor-motor behavior. Alongside the coding work, the lab also built operational familiarity with configuring the processor over Ethernet (ADS routing, fingerprint verification), scanning EtherCAT Terminals, and forcing physical inputs for online testing.</p>
+
+<h2>Hardware Platform</h2>
+<p>The target controller is a <strong>Beckhoff CX5140</strong> &mdash; a DIN-rail-mounted embedded Industrial PC running the TwinCAT real-time runtime alongside a standard Windows image. The CX5140 integrates directly with Beckhoff's EtherCAT Terminal bus, and in this lab it was populated with digital input and digital output terminals corresponding to the switch panel and lamp load, respectively. Physical I/O mapping used Beckhoff's IEC-style channel addressing:</p>
+
+<table>
+<thead>
+<tr><th>Variable</th><th>Channel</th><th>Address</th><th>Direction</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Start_PB</code></td><td>Terminal input 1</td><td><code>%IX40.0</code></td><td>Input</td></tr>
+<tr><td><code>Stop_PB</code></td><td>Terminal input 2</td><td><code>%IX40.1</code></td><td>Input</td></tr>
+<tr><td><code>LS</code> (box-in-position limit switch)</td><td>Terminal input 3</td><td><code>%IX40.2</code></td><td>Input</td></tr>
+<tr><td><code>WT_SENSE</code> (weight sensor)</td><td>Terminal input 4</td><td><code>%IX40.3</code></td><td>Input</td></tr>
+<tr><td><code>Reset_PB</code></td><td>Terminal input 5</td><td><code>%IX40.4</code></td><td>Input</td></tr>
+<tr><td><code>M1</code> (box conveyor)</td><td>Terminal output 1</td><td><code>%QX26.0</code></td><td>Output</td></tr>
+<tr><td><code>M2</code> (product feed)</td><td>Terminal output 2</td><td><code>%QX26.1</code></td><td>Output</td></tr>
+<tr><td><code>FILL</code> (fill solenoid)</td><td>Terminal output 3</td><td><code>%QX26.2</code></td><td>Output</td></tr>
+<tr><td><code>LA4</code></td><td>Terminal output 4</td><td><code>%QX26.3</code></td><td>Output</td></tr>
+<tr><td><code>LA5</code></td><td>Terminal output 5</td><td><code>%QX26.4</code></td><td>Output</td></tr>
+</tbody>
+</table>
+
+<p>The controller was networked over Ethernet to the engineering PC, with the TwinCAT ADS route established using IP <code>131.151.52.144</code> (lab bench controller <code>CX0728E8E</code>), secured with a fingerprint-verified ADS route and an authenticated administrator session.</p>
+
+<h2>Engineering Environment &amp; Workflow</h2>
+<p>All programming was done in <strong>TwinCAT XAE Shell</strong> (TwinCAT 3) using the Visual Studio-based engineering environment. The project used the standard PLC project template, with a custom <strong>POU (Program Organization Unit)</strong> created as type <em>Program</em> and language <em>Ladder Logic Diagram (LD)</em>. The POU was attached to the default <code>PlcTask</code> so the runtime scheduler would execute it cyclically alongside the rest of the system.</p>
+<p>Variables were declared between <code>VAR</code> / <code>END_VAR</code> with IEC 61131-3 typing. Physical I/O was declared using the <code>AT %I*</code> / <code>AT %Q*</code> placeholder syntax and then <strong>linked</strong> to real EtherCAT Terminal channels through TwinCAT's I/O tree after the project was first built. This two-step approach &mdash; symbolic declaration first, hardware binding after &mdash; is the Beckhoff convention and makes the program portable across terminal reshuffles.</p>
+<p>The workflow for each exercise followed the same loop: author the ladder, <em>Build Solution</em>, <em>Activate Configuration</em> (generating trial licenses if prompted), go <strong>online</strong> via <code>PLC &rarr; Login</code>, and then exercise the program by toggling physical switches and observing the live ladder where energized elements highlight in blue. When a physical switch wasn't convenient &mdash; for example the non-existent <code>Reset_PB</code> &mdash; inputs were <strong>forced</strong> online from the I/O tree's <em>Online</em> tab, using the <em>Force</em> / <em>Release</em> workflow on the input channel.</p>
+
+<h2>Exercises</h2>
+
+<h3>II. Series Operation (Logical AND)</h3>
+<p>The first rung implemented a two-input AND: <code>LS</code> and <code>WT_SENSE</code> placed in series drive the <code>LA5</code> lamp. This exercise doubled as the platform-familiarization task, walking through POU creation, variable declaration, I/O linking, build, activate, login, and online test.</p>
+
+<h3>III. Parallel Operation (Logical OR)</h3>
+<p>The ladder was modified offline (in <em>Config Mode</em>) to place <code>LS</code> and <code>WT_SENSE</code> on parallel branches driving <code>LA5</code>, exercising the Branch Start/End toolbox element and reinforcing the offline-edit &rarr; rebuild &rarr; re-download cycle.</p>
+
+<h3>IV. Timer Operation</h3>
+<p>A TON (on-delay timer) was added on a new network so that closing <code>LS</code> immediately energized <code>LA4</code> and, five seconds later, also energized <code>M2</code>. This demonstrated the TON function block &mdash; its <code>IN</code> enable, <code>PT</code> preset time (specified as <code>T#5s</code>), <code>Q</code> output, and the <code>ET</code> elapsed-time output tied to a <code>TIME</code> variable for live monitoring.</p>
+
+<h3>V. Ladder Editing</h3>
+<p>The program was annotated with network comments (enabled via <em>Tools &rarr; Options &rarr; TwinCAT &rarr; PLC Environment &rarr; FBD/LD and IL Editors &rarr; Show network comment</em>) and additional internal coils were declared between the <code>VAR</code> blocks to support the final state-machine logic.</p>
+
+<h3>VI. Cereal Box Filler (primary deliverable)</h3>
+<p>The culminating task was a complete cereal box filling station controller.</p>
+<p><strong>Process description.</strong> Motor <code>M1</code> runs the conveyor until an empty box arrives at the fill position, detected by the limit switch <code>LS</code>. The controller then dwells for 2.0 seconds, opens the <code>FILL</code> solenoid until the weight sensor <code>WT_SENSE</code> confirms the box is full, dwells another 3.0 seconds for settling, and then indexes the next box. Pressing <code>Stop_PB</code> at any point pauses the machine at the current step &mdash; both motors and the fill solenoid are de-energized, but the active step and its dwell timers remain valid so <code>Start_PB</code> cleanly resumes the suspended step. The <code>Reset_PB</code> clears all steps and timers and returns the machine to its initial state, but is intentionally ignored while the machine is running. Motor <code>M2</code> (the product feed) runs continuously whenever the machine is not paused.</p>
+
+<h3>Implemented Program Structure</h3>
+<p>The final POU (<code>Series_Circuit</code> in the submitted program) uses the canonical IEC latched step-sequence pattern built entirely with set/reset coils:</p>
+<p><strong>Variables.</strong> Five physical inputs (<code>Start_PB</code>, <code>Stop_PB</code>, <code>LS</code>, <code>WT_SENSE</code>, <code>Reset_PB</code>), five physical outputs (<code>M1</code>, <code>M2</code>, <code>FILL</code>, <code>LA4</code>, <code>LA5</code>), a master <code>RUN</code> latch, five internal step bits (<code>STEP1</code> through <code>STEP5</code>), and two TON function-block instances (<code>TON_1</code>, <code>TON_2</code>) with their associated elapsed-time variables.</p>
+<p><strong>Run / pause supervisor.</strong> Network 1 latches the <code>RUN</code> bit on <code>Start_PB</code> and breaks it on <code>Stop_PB</code> via a standard seal-in circuit. This single bit gates every step transition and every output in the program, so pausing really does freeze the machine while preserving the state.</p>
+<p><strong>Step-activation default.</strong> Network 2 sets <code>STEP1</code> whenever <code>RUN</code> is true and no other step is active &mdash; effectively the &ldquo;no-steps-active&rdquo; condition that guarantees the machine always lands in the initial conveyor step after a clean start.</p>
+<p><strong>Main sequence.</strong> Networks 3&ndash;7 implement the production cycle. <code>STEP1</code> runs the conveyor until <code>LS</code> transitions <code>STEP1</code> &rarr; <code>STEP2</code>. <code>STEP2</code> enables <code>TON_1</code> with <code>PT = T#2s</code>; when the dwell completes, the step advances to <code>STEP3</code>. <code>STEP3</code> opens the fill solenoid until <code>WT_SENSE</code> transitions to <code>STEP4</code>. <code>STEP4</code> enables <code>TON_2</code> with <code>PT = T#3s</code> for the settling dwell, which advances to <code>STEP5</code>. <code>STEP5</code> indexes the conveyor until <code>LS</code> clears (new box leaves the position), after which the sequence wraps back to <code>STEP1</code>.</p>
+<p><strong>Reset path.</strong> Network 8 reacts to <code>Reset_PB</code> only while <code>RUN</code> is false (the lab requirement) &mdash; in that case every step bit (<code>STEP1</code> through <code>STEP5</code>) is reset and <code>STEP1</code> is re-set, guaranteeing a clean re-entry regardless of where the cycle was suspended.</p>
+<p><strong>Outputs.</strong> Networks 9&ndash;11 drive physical actuators directly off the step bits: <code>M1</code> runs while <code>STEP1 OR STEP5</code> is active (i.e., whenever the conveyor needs to move); <code>M2</code> runs whenever <code>RUN</code> is true; and <code>FILL</code> energizes only during <code>STEP3</code>. Because every output is conjoined with <code>RUN</code> (either directly or via the step bits, which themselves only advance while <code>RUN</code> is true), pressing <code>Stop_PB</code> instantly de-energizes the actuators while leaving the step latches and dwell timers intact &mdash; exactly the pause-and-resume behavior the specification requires.</p>
+
+<h2>Technical Accomplishments</h2>
+<p>The finished program correctly implements every requirement in the lab specification: a complete pause/resume supervisor built on a single <code>RUN</code> latch, a five-step production sequence with two independent on-delay timers, a reset path that respects the <em>&ldquo;ignored while running&rdquo;</em> rule, and differentiated motor behavior (<code>M1</code> only during conveyor moves, <code>M2</code> continuous, <code>FILL</code> only during the weigh step). Beyond the code itself, the exercise produced working fluency with TwinCAT 3's ADS routing, EtherCAT I/O scanning, variable linking, online editing, and input forcing &mdash; the operational skills that separate someone who can program a PLC on a simulator from someone who can bring one up on real bench hardware.</p>
+
+<h2>Skills Demonstrated</h2>
+<p>On the programming side the project covers IEC 61131-3 Ladder Diagram authoring, POU creation and task assignment, typed variable declaration, on-delay timer (TON) function blocks, set/reset coil-based state machines, and seal-in latching circuits. On the platform side it covers Beckhoff TwinCAT 3 engineering workflow in Visual Studio XAE Shell, ADS route creation with fingerprint verification, EtherCAT Terminal scanning, symbolic-to-physical I/O linking, online activation, online input forcing for test, and bench-level Ethernet networking to an embedded CX-series controller. On the control-system-design side it covers sequential process control, pause/resume without loss of state, reset handling under operational constraints, and clean separation between a sequencer and its actuator outputs.</p>
+
+<h2>Tools &amp; Technologies</h2>
+<div class="tech-block">
+<p><strong>Controller:</strong> Beckhoff CX5140 Windows-based embedded PC with EtherCAT Terminal I/O.</p>
+<p><strong>Engineering software:</strong> TwinCAT 3 (XAE Shell on Visual Studio), with the PLC runtime, Ladder Diagram (LD) and Structured Text (ST) editors, and TwinCAT ADS.</p>
+<p><strong>Languages &amp; standards:</strong> IEC 61131-3 Ladder Diagram, IEC variable and address syntax (<code>%IX</code>, <code>%QX</code>, <code>T#</code> time literals), TON function block.</p>
+<p><strong>Communication:</strong> EtherCAT for I/O, Ethernet/ADS for engineering and on-line access.</p>
+</div>
+
+<h2>Outcome</h2>
+<p>The laboratory produced a working cereal-filler control program that was demonstrated online to the instructor on the bench hardware, together with a printed ladder listing documenting all networks. The deeper outcome was end-to-end familiarity with a second major PLC ecosystem (Beckhoff / TwinCAT 3 alongside prior coursework on Rockwell and Siemens), and mastery of the latched-step sequencer &mdash; a pattern that generalizes directly to the vast majority of discrete-manufacturing, packaging, and batch-process applications in industry.</p>
+
+</body>
+</html>
